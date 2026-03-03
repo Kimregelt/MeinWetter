@@ -752,7 +752,7 @@ function renderAll(current, forecast, alerts) {
         <div class="temp-block">
           <div class="temp-value">${w.temperature !== null ? Math.round(w.temperature) : '—'}<span class="temp-unit">°C</span></div>
           <div class="condition-label">${conditionDE(w.icon)}</div>
-          <div class="feels-like">GEFÜHLT ${w.dew_point !== null ? Math.round(w.temperature - (100 - w.relative_humidity) / 5) : '—'}°C</div>
+          <div class="feels-like">GEFÜHLT ${w.temperature != null && w.relative_humidity != null ? Math.round(w.temperature - (100 - w.relative_humidity) / 5) : '—'}°C</div>
         </div>
         <div class="weather-icon-large">${weatherIcon(w.icon, w.condition)}</div>
       </div>
@@ -767,24 +767,24 @@ function renderAll(current, forecast, alerts) {
         </div>
         <div class="data-cell">
           <div class="data-label">WIND</div>
-          <div class="data-value ${w.wind_speed > 50 ? 'warn' : ''}">${w.wind_speed !== null ? Math.round(w.wind_speed) : '—'} km/h</div>
-          <div class="data-sub">${windDir(w.wind_direction)} · BÖEN ${w.wind_gust_speed !== null ? Math.round(w.wind_gust_speed) : '—'} km/h</div>
+          <div class="data-value ${(w.wind_speed ?? 0) > 50 ? 'warn' : ''}">${w.wind_speed != null ? Math.round(w.wind_speed) : '—'} km/h</div>
+          <div class="data-sub">${windDir(w.wind_direction)} · BÖEN ${w.wind_gust_speed != null ? Math.round(w.wind_gust_speed) : '—'} km/h</div>
         </div>
         <div class="data-cell">
           <div class="data-label">SICHTWEITE</div>
-          <div class="data-value ${w.visibility < 1000 ? 'warn' : 'good'}">${w.visibility !== null ? (w.visibility >= 1000 ? (w.visibility/1000).toFixed(0) + ' km' : w.visibility + ' m') : '—'}</div>
+          <div class="data-value ${(w.visibility ?? 9999) < 1000 ? 'warn' : 'good'}">${w.visibility != null ? (w.visibility >= 1000 ? (w.visibility/1000).toFixed(0) + ' km' : w.visibility + ' m') : '—'}</div>
         </div>
         <div class="data-cell">
           <div class="data-label">NIEDERSCHLAG</div>
-          <div class="data-value">${w.precipitation !== null ? w.precipitation.toFixed(1) : '—'} mm</div>
+          <div class="data-value">${w.precipitation != null ? w.precipitation.toFixed(1) : '—'} mm</div>
         </div>
         <div class="data-cell">
           <div class="data-label">SONNENSCHEIN</div>
-          <div class="data-value">${w.sunshine !== null ? Math.round(w.sunshine) : '—'} min</div>
+          <div class="data-value">${w.sunshine != null ? Math.round(w.sunshine) : '—'} min</div>
         </div>
         <div class="data-cell">
           <div class="data-label">TAUPUNKT</div>
-          <div class="data-value">${w.dew_point !== null ? Math.round(w.dew_point) : '—'}°C</div>
+          <div class="data-value">${w.dew_point != null ? Math.round(w.dew_point) : '—'}°C</div>
         </div>
         <div class="data-cell">
           <div class="data-label">BEWÖLKUNG</div>
