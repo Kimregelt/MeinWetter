@@ -942,9 +942,11 @@ async function loadRadarData(ctx, canvas) {
     const r = await fetch(`${BRIGHTSKY}/radar?lat=${currentLat}&lon=${currentLon}&distance=150000`);
     if (!r.ok) throw new Error('Radar nicht verfügbar');
     const data = await r.json();
+    window._radarMeta = data;
 
     if (!data.radar || !data.radar.length) {
       overlay.textContent = 'KEINE RADARDATEN VERFÜGBAR';
+      drawFallbackRadar(ctx, canvas.width, canvas.height);
       return;
     }
 
@@ -954,7 +956,7 @@ async function loadRadarData(ctx, canvas) {
     overlay.textContent = 'RADAR AKTIV · ' + radarFrames.length + ' FRAMES';
 
   } catch(e) {
-    overlay.textContent = 'RADAR: ' + (e.message || 'FEHLER');
+    overlay.textContent = 'RADAR: SIMULATION';
     drawFallbackRadar(ctx, canvas.width, canvas.height);
   }
 }
@@ -1062,31 +1064,6 @@ function stepRadar(dir) {
   const ctx = canvas.getContext('2d');
   drawRadarFrame(ctx, canvas, radarFrames[radarIndex], window._radarMeta || {});
 }
-
-// Store radar meta globally when loaded
-const origLoadRadar = loadRadarData;
-loadRadarData = async function(ctx, canvas) {
-  try {
-    const r = await fetch(`${BRIGHTSKY}/radar?lat=${currentLat}&lon=${currentLon}&distance=150000`);
-    if (!r.ok) throw new Error('Radar nicht verfügbar');
-    const data = await r.json();
-    window._radarMeta = data;
-
-    if (!data.radar || !data.radar.length) {
-      document.getElementById('radarOverlay').textContent = 'KEINE RADARDATEN VERFÜGBAR';
-      drawFallbackRadar(ctx, canvas.width, canvas.height);
-      return;
-    }
-
-    radarFrames = data.radar;
-    radarIndex = radarFrames.length - 1;
-    drawRadarFrame(ctx, canvas, radarFrames[radarIndex], data);
-    document.getElementById('radarOverlay').textContent = 'RADAR AKTIV · ' + radarFrames.length + ' FRAMES';
-  } catch(e) {
-    document.getElementById('radarOverlay').textContent = 'RADAR: SIMULATION';
-    drawFallbackRadar(ctx, canvas.width, canvas.height);
-  }
-};
 
 // Close suggestions on outside click
 document.addEventListener('click', e => {
