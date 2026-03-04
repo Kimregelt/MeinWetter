@@ -200,87 +200,146 @@ let lat=null,lon=null,city='';
 let rfInterval=null,rfFrames=[],rfIdx=0,rfPlaying=false;
 
 // ── STORAGE ──
-const LS = {
-  getFavs(){ try{return JSON.parse(localStorage.getItem('w_favs')||'[]')}catch{return[]} },
-  setFavs(f){ localStorage.setItem('w_favs',JSON.stringify(f)) },
-  isFav(n){ return this.getFavs().some(f=>f.name===n) },
-  toggleFav(n,la,lo){
-    let favs=this.getFavs();
-    if(favs.some(f=>f.name===n)) favs=favs.filter(f=>f.name!==n);
-    else favs.unshift({name:n,lat:la,lon:lo});
-    this.setFavs(favs); return this.isFav(n);
-  },
-  getLast(){ try{return JSON.parse(localStorage.getItem('w_last'))}catch{return null} },
-  setLast(n,la,lo){ localStorage.setItem('w_last',JSON.stringify({name:n,lat:la,lon:lo})) }
-};
+// ── STORAGE ──
+// Favourites and last city stored in localStorage with in-memory fallback
+const LS = (function(){
+  let mem = {};
+  let ok = false;
+  try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); ok=true; } catch(e){}
+  function r(k){ if(ok){ try{ return localStorage.getItem(k); }catch(e){} } return mem[k]||null; }
+  function w(k,v){ if(ok){ try{ localStorage.setItem(k,v); }catch(e){} } mem[k]=v; }
+  return {
+    getFavs(){ try{ return JSON.parse(r('w_favs')||'[]'); }catch(e){ return []; } },
+    setFavs(f){ w('w_favs', JSON.stringify(f)); },
+    isFav(n){ return this.getFavs().some(function(f){ return f.name===n; }); },
+    toggleFav(n,la,lo){
+      var favs=this.getFavs();
+      if(favs.some(function(f){return f.name===n;})) favs=favs.filter(function(f){return f.name!==n;});
+      else favs.unshift({name:n,lat:parseFloat(la),lon:parseFloat(lo)});
+      this.setFavs(favs); return this.isFav(n);
+    },
+    getLast(){ try{ return JSON.parse(r('w_last')); }catch(e){ return null; } },
+    setLast(n,la,lo){ w('w_last', JSON.stringify({name:n,lat:parseFloat(la),lon:parseFloat(lo)})); }
+  };
+}());
 
 // ── SEARCH ──
 const inp = document.getElementById('cityInput');
-let dbt, showFavs=false;
+let dbt = null;
+let ddOpen = false;
 
-inp.addEventListener('input',()=>{
-  showFavs=false; clearTimeout(dbt);
-  const v=inp.value.trim();
-  if(v.length<2){closeDD();return}
-  dbt=setTimeout(()=>fetchSugg(v),300);
-});
-inp.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){closeDD();searchCity()}
-  if(e.key==='Escape')closeDD()
-});
-inp.addEventListener('focus',()=>{
-  if(inp.value.trim().length<2&&LS.getFavs().length) showFavDropdown();
+// Suggestions while typing
+inp.addEventListener('input', function(){
+  clearTimeout(dbt);
+  var v = inp.value.trim();
+  if(v.length < 2){ closeDD(); return; }
+  dbt = setTimeout(function(){ fetchSugg(v); }, 350);
 });
 
+inp.addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ closeDD(); searchCity(); }
+  if(e.key==='Escape') closeDD();
+});
+
+// Show favs when field is focused and empty
+inp.addEventListener('focus', function(){
+  if(inp.value.trim().length < 2){
+    var favs = LS.getFavs();
+    if(favs.length) renderDD(buildFavItems(favs));
+  }
+});
+
+// Star/Fav button
 function toggleFavs(){
-  if(showFavs){closeDD();return}
-  showFavDropdown();
+  if(ddOpen){ closeDD(); return; }
+  var favs = LS.getFavs();
+  renderDD(buildFavItems(favs));
 }
 
-function showFavDropdown(){
-  const favs=LS.getFavs();
-  showFavs=true;
-  if(!favs.length){openDD([{t:'lbl',text:'NOCH KEINE FAVORITEN'}]);return}
-  openDD([{t:'lbl',text:'FAVORITEN ★'},...favs.map(f=>({t:'fav',...f}))]);
+function buildFavItems(favs){
+  if(!favs.length) return [{t:'lbl',text:'NOCH KEINE FAVORITEN — BEIM SUCHEN ★ TIPPEN'}];
+  var items = [{t:'lbl',text:'FAVORITEN'}];
+  favs.forEach(function(f){ items.push({t:'city',name:f.name,lat:f.lat,lon:f.lon,isFav:true}); });
+  return items;
 }
 
 async function fetchSugg(q){
   try{
-    const r=await fetch(`${NOM}/search?q=${encodeURIComponent(q)}&countrycodes=de,at,ch&limit=5&format=json&addressdetails=1`);
-    const data=await r.json();
-    const items=[];
-    const favMatch=LS.getFavs().filter(f=>f.name.toLowerCase().includes(q.toLowerCase()));
-    if(favMatch.length){items.push({t:'lbl',text:'FAVORITEN'});favMatch.forEach(f=>items.push({t:'fav',...f}))}
+    var r = await fetch(NOM+'/search?q='+encodeURIComponent(q)+'&countrycodes=de,at,ch&limit=6&format=json&addressdetails=1');
+    var data = await r.json();
+    var items = [];
+    // Matching favourites first
+    var favs = LS.getFavs();
+    var favMatch = favs.filter(function(f){ return f.name.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    if(favMatch.length){
+      items.push({t:'lbl',text:'FAVORITEN'});
+      favMatch.forEach(function(f){ items.push({t:'city',name:f.name,lat:f.lat,lon:f.lon,isFav:true}); });
+    }
+    // Nominatim results
     if(data.length){
-      items.push({t:'lbl',text:'ERGEBNISSE'});
-      data.forEach(r=>{
-        const n=r.address?.city||r.address?.town||r.address?.village||r.display_name.split(',')[0];
-        items.push({t:'res',name:n,state:r.address?.state||'',lat:parseFloat(r.lat),lon:parseFloat(r.lon)});
+      items.push({t:'lbl',text:'VORSCHLÄGE'});
+      data.forEach(function(res){
+        var n = res.address&&(res.address.city||res.address.town||res.address.village||res.address.municipality) || res.display_name.split(',')[0];
+        var s = res.address&&res.address.state || '';
+        // skip duplicates with favs
+        if(!favMatch.some(function(f){ return f.name===n; })){
+          items.push({t:'city',name:n,state:s,lat:parseFloat(res.lat),lon:parseFloat(res.lon),isFav:LS.isFav(n)});
+        }
       });
     }
-    openDD(items);
-  }catch{}
+    renderDD(items);
+  }catch(e){}
 }
 
-function openDD(items){
-  const box=document.getElementById('dropdown');
-  if(!items.length){closeDD();return}
-  box.innerHTML=items.map(it=>{
-    if(it.t==='lbl') return `<div class="dd-label">${it.text}</div>`;
-    const fav=LS.isFav(it.name);
-    const ne=it.name.replace(/'/g,"\\'");
-    return `<div class="dd-item">
-      <span onclick="pick('${ne}',${it.lat},${it.lon})" style="flex:1;cursor:pointer">${it.name}${it.state?`<span style="color:var(--text3)"> — ${it.state}</span>`:''}</span>
-      <span class="star${fav?' on':''}" onclick="toggleStar(this,'${ne}',${it.lat},${it.lon})">${fav?'★':'☆'}</span>
-    </div>`;
+// Store a map of name->coords for star toggles
+var _ddCoords = {};
+
+function renderDD(items){
+  var box = document.getElementById('dropdown');
+  if(!items.length){ closeDD(); return; }
+  _ddCoords = {};
+  var html = items.map(function(it){
+    if(it.t==='lbl') return '<div class="dd-label">'+it.text+'</div>';
+    _ddCoords[it.name] = {lat:it.lat, lon:it.lon};
+    var fav = it.isFav || LS.isFav(it.name);
+    var state = it.state ? '<span style="color:var(--text3)"> — '+it.state+'</span>' : '';
+    // Use data attributes to avoid quote-escaping issues in onclick
+    return '<div class="dd-item" data-name="'+encodeURIComponent(it.name)+'" data-lat="'+it.lat+'" data-lon="'+it.lon+'">'
+      +'<span class="dd-name" style="flex:1;cursor:pointer">'+it.name+state+'</span>'
+      +'<span class="star'+(fav?' on':'')+'" data-name="'+encodeURIComponent(it.name)+'" style="cursor:pointer">'+(fav?'★':'☆')+'</span>'
+      +'</div>';
   }).join('');
-  box.style.display='block';
+  box.innerHTML = html;
+  box.style.display = 'block';
+  ddOpen = true;
+
+  // Attach click handlers directly (no inline onclick = no escaping issues)
+  box.querySelectorAll('.dd-item').forEach(function(el){
+    el.querySelector('.dd-name').addEventListener('click', function(){
+      var n = decodeURIComponent(el.dataset.name);
+      var la = parseFloat(el.dataset.lat);
+      var lo = parseFloat(el.dataset.lon);
+      pick(n, la, lo);
+    });
+    var star = el.querySelector('.star');
+    star.addEventListener('click', function(e){
+      e.stopPropagation();
+      var n = decodeURIComponent(star.dataset.name);
+      var coords = _ddCoords[n] || {};
+      var on = LS.toggleFav(n, coords.lat, coords.lon);
+      star.classList.toggle('on', on);
+      star.textContent = on ? '★' : '☆';
+    });
+  });
 }
 
-function closeDD(){ showFavs=false; document.getElementById('dropdown').style.display='none'; }
+function closeDD(){
+  ddOpen = false;
+  document.getElementById('dropdown').style.display='none';
+}
 
 function toggleStar(el,n,la,lo){
-  const on=LS.toggleFav(n,la,lo);
+  var on=LS.toggleFav(n,la,lo);
   el.classList.toggle('on',on); el.textContent=on?'★':'☆';
 }
 
@@ -623,29 +682,55 @@ function stepR(dir){
 }
 
 // ── PULL TO REFRESH ──
-let pY=0,pA=false,pT=false;
-const ptrEl=document.getElementById('ptr'), PTR=80;
-document.addEventListener('touchstart',e=>{if(window.scrollY===0){pY=e.touches[0].clientY;pA=true;pT=false}},{passive:true});
-document.addEventListener('touchmove',e=>{
-  if(!pA)return;
-  const d=e.touches[0].clientY-pY;
-  if(d>0&&window.scrollY===0){
-    const h=Math.min(d*.5,PTR);
-    ptrEl.style.height=h+'px';
-    ptrEl.textContent=h>=PTR*.8?'↑ LOSLASSEN ZUM AKTUALISIEREN':'↓ ZIEHEN ZUM AKTUALISIEREN';
-    if(h>=PTR*.8)pT=true;
+// iOS Safari 16+ has native PTR which interferes — we use a refresh button instead
+// and also support PTR via overscroll on the page body
+var ptrEl = document.getElementById('ptr');
+var ptrStartY = 0, ptrDelta = 0, ptrActive = false, ptrFired = false;
+var PTR_THRESH = 70;
+
+document.addEventListener('touchstart', function(e){
+  if(window.scrollY === 0 && e.touches.length === 1){
+    ptrStartY = e.touches[0].pageY;
+    ptrActive = true;
+    ptrFired = false;
+    ptrDelta = 0;
   }
-},{passive:true});
-document.addEventListener('touchend',()=>{
-  if(!pA)return; pA=false; ptrEl.style.height='0';
-  if(pT&&lat){
-    ptrEl.textContent='↺ AKTUALISIERE...'; ptrEl.style.height='40px';
-    loadWeather().then(()=>setTimeout(()=>{ptrEl.style.height='0'},500));
+}, {passive: true});
+
+document.addEventListener('touchmove', function(e){
+  if(!ptrActive) return;
+  ptrDelta = e.touches[0].pageY - ptrStartY;
+  if(ptrDelta > 0 && window.scrollY === 0){
+    var h = Math.min(ptrDelta * 0.45, PTR_THRESH + 10);
+    ptrEl.style.height = h + 'px';
+    if(h >= PTR_THRESH){
+      ptrEl.textContent = '↑ LOSLASSEN ZUM AKTUALISIEREN';
+      ptrFired = true;
+    } else {
+      ptrEl.textContent = '↓ ZIEHEN ZUM AKTUALISIEREN';
+      ptrFired = false;
+    }
+  }
+}, {passive: true});
+
+document.addEventListener('touchend', function(){
+  if(!ptrActive) return;
+  ptrActive = false;
+  ptrEl.style.height = '0';
+  if(ptrFired && lat){
+    ptrEl.style.height = '36px';
+    ptrEl.textContent = '↺ AKTUALISIERE...';
+    loadWeather().then(function(){
+      setTimeout(function(){ ptrEl.style.height = '0'; }, 600);
+    });
   }
 });
 
 // ── CLOSE DD ON OUTSIDE CLICK ──
-document.addEventListener('click',e=>{if(!e.target.closest('.search-section'))closeDD()});
+document.addEventListener('click', function(e){
+  var ss = document.querySelector('.search-section');
+  if(ss && !ss.contains(e.target)) closeDD();
+});
 
 // ── AUTO-LOAD LAST CITY ──
 window.addEventListener('load',()=>{
