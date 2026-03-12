@@ -38,12 +38,15 @@ body{
   box-shadow:0 2px 12px rgba(0,0,0,.3);
 }
 .logo{
-  font-size:18px;font-weight:700;white-space:nowrap;
+  font-weight:700;white-space:nowrap;
   background:linear-gradient(135deg,#64b5f6,#42a5f5);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  letter-spacing:-.5px;
+  display:flex;align-items:center;gap:4px;
+  flex-shrink:0;
 }
-.logo span{font-size:14px;opacity:.7}
+.logo-cloud{font-size:22px;-webkit-text-fill-color:initial}
+.logo-text{display:flex;flex-direction:column;line-height:1.05;font-size:13px;letter-spacing:1px}
+.logo-text span{display:inline-block;transform:scaleX(-1)}
 .search-wrap{
   flex:0 1 200px;position:relative;
   display:flex;align-items:center;
@@ -123,8 +126,8 @@ body{
 .current-top{display:flex;align-items:flex-start;justify-content:space-between}
 .current-left{}
 .city-name{font-size:22px;font-weight:700;margin-bottom:2px}
-.current-temp{font-size:72px;font-weight:200;line-height:1;letter-spacing:-4px}
-.current-temp .unit{font-size:32px;font-weight:300;letter-spacing:0}
+.current-temp{font-size:72px;font-weight:200;line-height:1;letter-spacing:-4px;display:flex;align-items:center}
+.current-temp .unit{font-size:32px;font-weight:300;letter-spacing:0;align-self:center}
 .feels-like{font-size:15px;opacity:.6;margin-top:4px}
 .current-right{text-align:center;padding-top:8px}
 .weather-icon-big{font-size:64px;line-height:1}
@@ -166,7 +169,7 @@ body{
    ═══════════════════════════════════════════════ */
 .forecast-day{
   display:grid;
-  grid-template-columns:60px 1fr 42px 42px 28px 44px 50px;
+  grid-template-columns:90px 1fr 42px 42px 28px 44px 50px;
   align-items:center;gap:4px;
   padding:10px 0;
   border-bottom:1px solid rgba(255,255,255,.06);
@@ -180,7 +183,7 @@ body{
 .fd-icon{font-size:24px;text-align:center}
 .fd-max{font-size:16px;font-weight:700;text-align:right}
 .fd-min{font-size:14px;opacity:.5;text-align:right}
-.fd-sun{font-size:11px;opacity:.5;text-align:center;display:flex;align-items:center;gap:2px;justify-content:center}
+.fd-sun{font-size:11px;opacity:.5;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0;justify-content:center}
 .fd-rain{font-size:11px;opacity:.5;text-align:right;display:flex;align-items:center;gap:2px;justify-content:flex-end}
 
 /* Day Detail Expansion */
@@ -214,7 +217,7 @@ body{
    ═══════════════════════════════════════════════ */
 .temp-chart-wrap{
   position:relative;
-  height:180px;
+  height:200px;
   margin:0 -8px;
 }
 .temp-chart-wrap canvas{width:100%!important;height:100%!important}
@@ -344,7 +347,7 @@ body{
 
 <!-- Header -->
 <header class="header">
-  <div class="logo">☁️ MeinWetter</div>
+  <div class="logo"><span class="logo-cloud">☁️</span><div class="logo-text"><span>M</span><span>W</span></div></div>
   <div class="search-wrap" id="searchWrap">
     <button class="fav-btn inactive" id="favToggle" aria-label="Favorit">★</button>
     <input class="search-input" id="searchInput" type="text" placeholder="Stadt suchen" autocomplete="off" enterkeyhint="search">
@@ -378,7 +381,11 @@ body{
 
   <!-- Card 2: Hourly Forecast -->
   <div class="card" id="cardHourly">
-    <div class="card-title">Stündlich</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="card-title" style="margin-bottom:0">Stündlich</div>
+      <div id="hourlyDayLabel" style="font-size:12px;opacity:.5;padding-right:4px"></div>
+    </div>
+    <div style="height:14px"></div>
     <div class="hourly-scroll" id="hourlyScroll"></div>
   </div>
 
@@ -535,10 +542,11 @@ async function getCurrentWeather(lat, lon){
 
 async function getHourlyForecast(lat, lon){
   const now = new Date();
-  const from = now.toISOString();
-  const to = new Date(now.getTime() + 48*3600*1000).toISOString();
+  const to = new Date(now.getTime() + 48*3600*1000);
+  const fromStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'T'+pad(now.getHours())+':00:00';
+  const toStr = to.getFullYear()+'-'+pad(to.getMonth()+1)+'-'+pad(to.getDate())+'T'+pad(to.getHours())+':00:00';
   const data = await fetchJSON(
-    `https://api.brightsky.dev/weather?lat=${lat}&lon=${lon}&date=${from}&last_date=${to}`
+    `https://api.brightsky.dev/weather?lat=${lat}&lon=${lon}&date=${fromStr}&last_date=${toStr}`
   );
   return data.weather || [];
 }
@@ -547,9 +555,11 @@ async function get10DayForecast(lat, lon){
   const now = new Date();
   const from = new Date(now);
   from.setHours(0,0,0,0);
-  const to = new Date(from.getTime() + 10*24*3600*1000);
+  const to = new Date(from.getTime() + 11*24*3600*1000);
+  const fromStr = from.getFullYear()+'-'+pad(from.getMonth()+1)+'-'+pad(from.getDate())+'T00:00:00';
+  const toStr = to.getFullYear()+'-'+pad(to.getMonth()+1)+'-'+pad(to.getDate())+'T23:59:59';
   const data = await fetchJSON(
-    `https://api.brightsky.dev/weather?lat=${lat}&lon=${lon}&date=${from.toISOString()}&last_date=${to.toISOString()}`
+    `https://api.brightsky.dev/weather?lat=${lat}&lon=${lon}&date=${fromStr}&last_date=${toStr}`
   );
   return data.weather || [];
 }
@@ -707,12 +717,13 @@ function renderHourly(hourlyData){
   // Filter to next ~24 hours starting from current hour
   const upcoming = hourlyData.filter(h => new Date(h.timestamp) >= new Date(now.getTime() - 3600*1000)).slice(0,24);
 
+  // Store timestamps on items for scroll detection
   container.innerHTML = upcoming.map((h,i) => {
     const d = new Date(h.timestamp);
     const isNow = i === 0;
     const precProb = h.precipitation_probability != null ? h.precipitation_probability : '';
     const precMm = h.precipitation != null && h.precipitation > 0 ? h.precipitation.toFixed(1) : '';
-    return `<div class="hour-item${isNow?' now':''}">
+    return `<div class="hour-item${isNow?' now':''}" data-ts="${h.timestamp}">
       <div class="hour-time">${isNow?'Jetzt':fmtTime(d)}</div>
       <div class="hour-icon">${weatherIcon(h.icon)}</div>
       <div class="hour-temp">${h.temperature!=null?Math.round(h.temperature):'--'}°</div>
@@ -720,6 +731,46 @@ function renderHourly(hourlyData){
       ${precMm?'<div class="hour-rain-mm">'+precMm+' mm</div>':''}
     </div>`;
   }).join('');
+
+  // Scroll handler for dynamic day label
+  const dayLabel = $('hourlyDayLabel');
+  const todayStr = now.toISOString().slice(0,10);
+  container.addEventListener('scroll', function(){
+    const items = container.querySelectorAll('.hour-item');
+    const containerRect = container.getBoundingClientRect();
+    // Find the rightmost fully visible item
+    let rightmostDay = null;
+    items.forEach(item => {
+      const r = item.getBoundingClientRect();
+      if(r.left >= containerRect.left && r.right <= containerRect.right){
+        const ts = item.dataset.ts;
+        if(ts) rightmostDay = new Date(ts);
+      }
+    });
+    if(!rightmostDay){ dayLabel.textContent = ''; return; }
+    const rightDayStr = rightmostDay.toISOString().slice(0,10);
+    // Also check leftmost visible item
+    let leftmostDay = null;
+    for(const item of items){
+      const r = item.getBoundingClientRect();
+      if(r.right > containerRect.left && r.left < containerRect.right){
+        const ts = item.dataset.ts;
+        if(ts){ leftmostDay = new Date(ts); break; }
+      }
+    }
+    const leftDayStr = leftmostDay ? leftmostDay.toISOString().slice(0,10) : todayStr;
+    // Show label only if all visible items are from a different day than today
+    if(leftDayStr !== todayStr){
+      const tmrStr = new Date(now.getTime()+86400000).toISOString().slice(0,10);
+      if(leftDayStr === tmrStr){
+        dayLabel.textContent = 'Morgen';
+      } else {
+        dayLabel.textContent = dayName(new Date(leftDayStr), false);
+      }
+    } else {
+      dayLabel.textContent = '';
+    }
+  });
 }
 
 function renderForecast(days10){
@@ -737,7 +788,7 @@ function renderForecast(days10){
         <div class="fd-icon">${weatherIcon(d.icon)}</div>
         <div class="fd-max">${d.maxTemp!=null?d.maxTemp:'--'}°</div>
         <div class="fd-min">${d.minTemp!=null?d.minTemp:'--'}°</div>
-        <div class="fd-sun">☀️${d.sunshine}h</div>
+        <div class="fd-sun"><span>☀️</span><span>${d.sunshine}h</span></div>
         <div class="fd-rain">💧${d.rainProb}%</div>
         <div></div>
       </div>
@@ -808,7 +859,7 @@ function renderTempChart(days10){
   const allTemps = [...maxTemps, ...minTemps];
   const tMin = Math.min(...allTemps) - 3;
   const tMax = Math.max(...allTemps) + 3;
-  const padL = 10, padR = 10, padT = 30, padB = 30;
+  const padL = 10, padR = 10, padT = 30, padB = 42;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const n = aggregated.length;
@@ -822,7 +873,10 @@ function renderTempChart(days10){
   ctx.textAlign = 'center';
   aggregated.forEach((d, i) => {
     const date = new Date(d.date);
-    ctx.fillText(dayName(date, true), x(i), H - 6);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText(dayName(date, true), x(i), H - 18);
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText(fmt(date), x(i), H - 5);
   });
 
   // Max line
@@ -898,7 +952,7 @@ function initRadar(){
     zoomControl: false,
     attributionControl: false
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 12,
     subdomains: 'abcd'
   }).addTo(radarMap);
