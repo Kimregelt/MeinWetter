@@ -1092,7 +1092,11 @@ function showRadarFrame(pos){
     const d = new Date(radarFrames[pos].time * 1000);
     const isPast = pos <= radarLastPastPos;
     const timeStr = fmtTime(d);
-    const label = isPast ? timeStr : timeStr + ' ▸';
+    // Show date if not today
+    const today = new Date().toISOString().slice(0,10);
+    const frameDay = d.toISOString().slice(0,10);
+    const datePrefix = frameDay !== today ? fmt(d)+' ' : '';
+    const label = datePrefix + timeStr + (isPast ? '' : ' ▸ Vorhersage');
     $('radarTime').textContent = label;
   }
   $('radarSlider').value = pos;
@@ -1136,21 +1140,33 @@ function toggleRadarLayer(layer){
         l.setOpacity(activeRadarLayers.rain ? 0.6 : 0);
       }
     });
-    // Re-show current frame
     showRadarFrame(radarAnimPos);
   }
 
-  // Cloud layer (using RainViewer satellite infrared)
+  // Cloud layer (RainViewer satellite infrared - color scheme 1 = Original, high opacity)
   if(layer === 'clouds'){
     if(activeRadarLayers.clouds){
       if(radarApiData && radarApiData.satellite && radarApiData.satellite.infrared){
         const latestSat = radarApiData.satellite.infrared[radarApiData.satellite.infrared.length - 1];
         if(latestSat){
+          // Color scheme 1 = Original (dark/visible), smooth=1, no snow
           cloudLayer = L.tileLayer(
-            radarApiData.host + latestSat.path + '/256/{z}/{x}/{y}/0/0_0.png',
-            { opacity: 0.35, zIndex: 200, maxZoom: 10, maxNativeZoom: 7 }
+            radarApiData.host + latestSat.path + '/256/{z}/{x}/{y}/1/1_0.png',
+            { opacity: 0.75, zIndex: 200, maxZoom: 10, maxNativeZoom: 7 }
           ).addTo(radarMap);
         }
+      }
+      // Fallback: DWD satellite WMS if RainViewer has no satellite data
+      if(!cloudLayer){
+        cloudLayer = L.tileLayer.wms('https://maps.dwd.de/geoserver/dwd/wms', {
+          layers: 'dwd:Satellitenbild_Komposit_IR',
+          format: 'image/png',
+          transparent: true,
+          opacity: 0.6,
+          zIndex: 200,
+          maxZoom: 10,
+          version: '1.1.1'
+        }).addTo(radarMap);
       }
     } else {
       if(cloudLayer && radarMap.hasLayer(cloudLayer)){
@@ -1160,18 +1176,17 @@ function toggleRadarLayer(layer){
     }
   }
 
-  // Wind layer (DWD WMS)
+  // Wind layer (DWD WMS - 10m wind data overlay)
   if(layer === 'wind'){
     if(activeRadarLayers.wind){
       windLayer = L.tileLayer.wms('https://maps.dwd.de/geoserver/dwd/wms', {
-        layers: 'dwd:GWN-PULS_10M',
+        layers: 'dwd:BRD_1km_winddaten_10m',
         format: 'image/png',
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.65,
         zIndex: 250,
         maxZoom: 10,
-        version: '1.3.0',
-        crs: L.CRS.EPSG4326
+        version: '1.1.1'
       }).addTo(radarMap);
     } else {
       if(windLayer && radarMap.hasLayer(windLayer)){
